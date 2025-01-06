@@ -1,9 +1,17 @@
 from flask import Flask, render_template, url_for, request, redirect,flash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from flask_migrate import Migrate
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI']='sqlite:///test.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # Prevents warnings
 db = SQLAlchemy(app)
+
+
+
+# Initialize Flask-Migrate
+migrate = Migrate(app, db)
+
 
 class Todo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -15,8 +23,8 @@ class Todo(db.Model):
 
 
 # Initialize the database
-def create_tables():
-    db.create_all()
+# def create_tables():
+#     db.create_all()
 
 
 
