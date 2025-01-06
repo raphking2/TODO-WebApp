@@ -22,9 +22,9 @@ class Todo(db.Model):
         return '<Task %r>' % self.id
 
 
-# Initialize the database
-# def create_tables():
-#     db.create_all()
+# Create the database tables
+with app.app_context():
+    db.create_all()
 
 
 
