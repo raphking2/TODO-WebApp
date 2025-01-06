@@ -14,6 +14,17 @@ class Todo(db.Model):
         return '<Task %r>' % self.id
 
 
+# Initialize the database manually
+@app.route('/initdb')
+def initdb():
+    try:
+        db.create_all()
+        return "Database initialized successfully!"
+    except Exception as e:
+        return f"An error occurred: {e}"
+
+        
+
 @app.route('/',methods=['POST','GET'])
 def index():
     if request.method == 'POST':
