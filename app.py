@@ -1,7 +1,32 @@
-from flask import Flask, render_template, url_for, request, redirect,flash
+import os
+from flask import Flask, jsonify, render_template, url_for, request, redirect,flash
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_migrate import Migrate
+
+#Additional Test
+import fitz  # PyMuPDF
+import docx
+from werkzeug.utils import secure_filename
+
+
+ALLOWED_EXTENSIONS = {'pdf', 'docx'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def extract_text_from_pdf(file_path):
+    text = ""
+    with fitz.open(file_path) as doc:
+        for page in doc:
+            text += page.get_text()
+    return text
+
+def extract_text_from_docx(file_path):
+    doc = docx.Document(file_path)
+    return "\n".join([para.text for para in doc.paragraphs])
+
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI']='sqlite:///test.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # Prevents warnings
@@ -73,6 +98,39 @@ def update(id):
 
     else:
         return render_template('update.html',task=task)
+
+
+
+
+@app.route('/parse-cv', methods=['POST'])
+def parse_cv():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in the request'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        temp_path = os.path.join('/tmp', filename)
+        file.save(temp_path)
+
+        try:
+            if filename.lower().endswith('.pdf'):
+                extracted_text = extract_text_from_pdf(temp_path)
+            elif filename.lower().endswith('.docx'):
+                extracted_text = extract_text_from_docx(temp_path)
+            else:
+                return jsonify({'error': 'Unsupported file type'}), 400
+
+            os.remove(temp_path)
+            return jsonify({'text': extracted_text})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    else:
+        return jsonify({'error': 'Invalid file type'}), 400
 
 
 
