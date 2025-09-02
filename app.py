@@ -1,18 +1,37 @@
 import os
-from flask import Flask, jsonify, render_template, url_for, request, redirect,flash,send_file
+import tempfile
+from flask import Flask, jsonify, render_template, url_for, request, redirect, flash, send_file
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_migrate import Migrate
 import io
 import base64
-import pandas as pd
-import plotly.express as px
 
+# Import data visualization packages with error handling
+try:
+    import pandas as pd
+    import plotly.express as px
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    print("Warning: Plotly/Pandas not available. Chart generation will be disabled.")
 
+# Import file processing packages with error handling
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    print("Warning: PyMuPDF not available. PDF processing will be disabled.")
 
-#Additional Test
-import fitz  # PyMuPDF
-import docx
+try:
+    import docx
+    DOCX_AVAILABLE = True
+except ImportError:
+    DOCX_AVAILABLE = False
+    print("Warning: python-docx not available. DOCX processing will be disabled.")
+
 from werkzeug.utils import secure_filename
 
 
@@ -22,6 +41,8 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def extract_text_from_pdf(file_path):
+    if not PYMUPDF_AVAILABLE:
+        raise ImportError("PyMuPDF is not available")
     text = ""
     with fitz.open(file_path) as doc:
         for page in doc:
@@ -29,11 +50,14 @@ def extract_text_from_pdf(file_path):
     return text
 
 def extract_text_from_docx(file_path):
+    if not DOCX_AVAILABLE:
+        raise ImportError("python-docx is not available")
     doc = docx.Document(file_path)
     return "\n".join([para.text for para in doc.paragraphs])
 
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI']='sqlite:///test.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # Prevents warnings
 db = SQLAlchemy(app)
@@ -120,7 +144,9 @@ def parse_cv():
 
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        temp_path = os.path.join('/tmp', filename)
+        # Use a cross-platform temporary directory
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, filename)
         file.save(temp_path)
 
         try:
@@ -141,23 +167,28 @@ def parse_cv():
 
 @app.route('/generate-charts', methods=['POST'])
 def generate_charts():
+    if not PLOTLY_AVAILABLE:
+        return jsonify({'error': 'Chart generation is not available. Plotly/Pandas not installed.'}), 503
+    
     try:
         data = request.get_json()
+        
+        if not data or 'visualizations' not in data:
+            return jsonify({'error': 'Invalid data format'}), 400
 
         # Example: Net Profit by Branch
         profit_data = data['visualizations'][0]['data_series']
         df_profit = pd.DataFrame(profit_data)
 
         fig = px.bar(df_profit, x='branch', y='net_profit', title='Net Profit by Branch')
-        img_bytes = fig.to_image(format="png")
-
-        # Encode to base64
-        encoded = base64.b64encode(img_bytes).decode('utf-8')
+        
+        # Use HTML instead of image for better compatibility
+        chart_html = fig.to_html(include_plotlyjs='cdn')
 
         return jsonify({
             "chart_type": "bar",
             "title": "Net Profit by Branch",
-            "image_base64": encoded
+            "chart_html": chart_html
         })
 
     except Exception as e:
