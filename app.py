@@ -1,8 +1,14 @@
 import os
-from flask import Flask, jsonify, render_template, url_for, request, redirect,flash
+from flask import Flask, jsonify, render_template, url_for, request, redirect,flash,send_file
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_migrate import Migrate
+import io
+import base64
+import pandas as pd
+import plotly.express as px
+
+
 
 #Additional Test
 import fitz  # PyMuPDF
@@ -131,6 +137,32 @@ def parse_cv():
             return jsonify({'error': str(e)}), 500
     else:
         return jsonify({'error': 'Invalid file type'}), 400
+    
+
+@app.route('/generate-charts', methods=['POST'])
+def generate_charts():
+    try:
+        data = request.get_json()
+
+        # Example: Net Profit by Branch
+        profit_data = data['visualizations'][0]['data_series']
+        df_profit = pd.DataFrame(profit_data)
+
+        fig = px.bar(df_profit, x='branch', y='net_profit', title='Net Profit by Branch')
+        img_bytes = fig.to_image(format="png")
+
+        # Encode to base64
+        encoded = base64.b64encode(img_bytes).decode('utf-8')
+
+        return jsonify({
+            "chart_type": "bar",
+            "title": "Net Profit by Branch",
+            "image_base64": encoded
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 
